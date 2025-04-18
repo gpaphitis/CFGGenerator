@@ -17,6 +17,8 @@
 #include <map>
 #include <set>
 
+#include <cassert>
+
 #define DIE(...)                      \
     do                                \
     {                                 \
@@ -25,20 +27,54 @@
         exit(EXIT_FAILURE);           \
     } while (0)
 
-enum bb_status
-{
-    UNSEEN,
-    ENQUEUED,
-    SEEN
-};
-
 typedef struct
 {
-    long start_addr;
-    long end_addr;
+    uint64_t start_addr;
+    uint64_t end_addr;
 } block_t;
 
-/* Instruction classification.  */
+void print_connections(std::map<block_t *, std::set<block_t *>> *connections, block_t *block)
+{
+    for (auto &pair : *connections)
+    {
+        block_t *from_block = pair.first;
+        if (from_block == block)
+        {
+            std::set<block_t *> *block_connections = &pair.second;
+            for (block_t *connection : *block_connections)
+                printf("\t0x%lx - 0x%lx\n", connection->start_addr, connection->end_addr);
+            return;
+        }
+    }
+}
+
+void print_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks)
+{
+    printf("GRAPH\n");
+    for (block_t *block : *blocks)
+    {
+        printf("0x%lx - 0x%lx\n", block->start_addr, block->end_addr);
+        print_connections(connections, block);
+    }
+}
+void check_correctness(std::set<block_t *> *blocks)
+{
+    for (block_t *block : *blocks)
+    {
+        for (block_t *other_block : *blocks)
+        {
+            if (block != other_block &&
+                ((block->start_addr >= other_block->start_addr && block->start_addr <= other_block->end_addr) ||
+                 (block->end_addr >= other_block->start_addr && block->end_addr <= other_block->end_addr)))
+            {
+                printf("Error\n");
+                printf("%lx - %lx\n", block->start_addr, block->end_addr);
+                printf("%lx - %lx\n", other_block->start_addr, other_block->end_addr);
+            }
+        }
+    }
+}
+
 bool is_cs_cflow_group(uint8_t g)
 {
     return (g == CS_GRP_JUMP) || (g == CS_GRP_CALL) || (g == CS_GRP_RET) || (g == CS_GRP_IRET);
@@ -56,15 +92,53 @@ bool is_cs_cflow_ins(cs_insn *ins)
     return false;
 }
 
+bool is_cs_call_ins(cs_insn *ins)
+{
+    return ins->id == X86_INS_CALL;
+}
+
 bool is_cs_unconditional_csflow_ins(cs_insn *ins)
 {
     switch (ins->id)
     {
-    case X86_INS_JMP:
-    case X86_INS_LJMP:
-    case X86_INS_RET:
-    case X86_INS_RETF:
-    case X86_INS_RETFQ:
+    case X86_INS_JMP:    // Unconditional jump
+    case X86_INS_LJMP:   // Far jump
+    case X86_INS_RET:    // Near return
+    case X86_INS_RETF:   // Far return (16-bit operand)
+    case X86_INS_RETFQ:  // Far return (64-bit operand)
+    case X86_INS_SYSRET: // Return from syscall
+    case X86_INS_IRET:   // Interrupt return (16-bit)
+    case X86_INS_IRETD:  // Interrupt return (32-bit)
+    case X86_INS_IRETQ:  // Interrupt return (64-bit)
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool is_cs_conditional_csflow_ins(cs_insn *ins)
+{
+    switch (ins->id)
+    {
+    case X86_INS_JA:
+    case X86_INS_JAE:
+    case X86_INS_JB:
+    case X86_INS_JBE:
+    case X86_INS_JCXZ:
+    case X86_INS_JECXZ:
+    case X86_INS_JRCXZ:
+    case X86_INS_JE:
+    case X86_INS_JG:
+    case X86_INS_JGE:
+    case X86_INS_JL:
+    case X86_INS_JLE:
+    case X86_INS_JNE:
+    case X86_INS_JNO:
+    case X86_INS_JNP:
+    case X86_INS_JNS:
+    case X86_INS_JO:
+    case X86_INS_JP:
+    case X86_INS_JS:
         return true;
     default:
         return false;
@@ -90,7 +164,7 @@ uint64_t get_cs_ins_immediate_target(cs_insn *ins)
     return 0;
 }
 
-void read_symbol_table(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *blocks, long unsigned text_start, long unsigned text_end)
+void read_symbol_table(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end)
 {
     Elf_Scn *scn = NULL;
     Elf_Scn *symtab = NULL;
@@ -129,16 +203,16 @@ void read_symbol_table(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *
         if (ELF64_ST_TYPE(sym.st_info) == STT_FUNC &&
             (sym.st_value >= text_start && sym.st_value < text_end))
         {
-            fprintf(stderr, "Queueing %s at %016lx.\n", elf_strptr(elf, shdr.sh_link, sym.st_name), sym.st_value);
             block_t *newBlock = (block_t *)malloc(sizeof(block_t));
             newBlock->start_addr = sym.st_value;
+            newBlock->end_addr = sym.st_value;
             Q->push(newBlock);
             blocks->insert(newBlock);
         }
     }
 }
 
-Elf_Data *find_text(Elf *elf, long unsigned *text_start, long unsigned *text_end)
+Elf_Data *find_text(Elf *elf, uint64_t *text_start, uint64_t *text_end)
 {
     Elf_Scn *scn = NULL;
     GElf_Shdr shdr;
@@ -243,7 +317,7 @@ void switch_connection_origin(std::map<block_t *, std::set<block_t *>> *connecti
     }
 }
 
-void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block)
+void handle_control_flow(uint64_t target, uint16_t size, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block, uint64_t text_start, uint64_t text_end)
 {
     block_t *target_block = NULL;
     if ((target_block = is_start_of_block(blocks, target)) != NULL)
@@ -253,11 +327,14 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
     else if ((target_block = is_between_of_block(blocks, target)) != NULL) // We have a jump to the middle of a block so we need to split the block
     {
         block_t *second_half = (block_t *)malloc(sizeof(block_t));
-        blocks->insert(second_half);
-        unexplored_blocks->push(second_half);
         second_half->start_addr = target;
         second_half->end_addr = target_block->end_addr;
-        target_block->end_addr = target;
+        target_block->end_addr = target - 1;
+        if (second_half->start_addr >= text_start && second_half->end_addr <= text_end)
+        {
+            blocks->insert(second_half);
+            unexplored_blocks->push(second_half);
+        }
         add_connection(connections, block, second_half);
         switch_connection_origin(connections, target_block, second_half);
     }
@@ -265,42 +342,50 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
     {
         target_block = (block_t *)malloc(sizeof(block_t));
         target_block->start_addr = target;
-        blocks->insert(target_block);
-        unexplored_blocks->push(target_block);
+        target_block->end_addr = target;
+        if (target_block->start_addr >= text_start)
+        {
+            blocks->insert(target_block);
+            unexplored_blocks->push(target_block);
+        }
     }
 }
 
-void disas_r(csh handle, Elf_Data *text, long text_start, long text_end, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block)
+void disas_r(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block)
 {
-
-    Elf *elf;
     uint64_t addr, offset, target;
     const uint8_t *pc;
     size_t n;
     cs_insn *cs_ins;
 
+    addr = block->start_addr;
     offset = addr - text_start;
     pc = (const unsigned char *)text->d_buf;
     pc += offset;
-    n = text_end - text_start;
+    n = text_end - addr;
 
     cs_ins = cs_malloc(handle);
-    fprintf(stderr, "Starting at 0x%016lx\n", addr);
     while (cs_disasm_iter(handle, &pc, &n, &addr, cs_ins))
     {
         if (cs_ins->id == X86_INS_INVALID || cs_ins->size == 0)
             break;
-
-        if (is_cs_unconditional_csflow_ins(cs_ins) || is_cs_cflow_ins(cs_ins))
+        if (is_cs_cflow_ins(cs_ins) == true)
         {
             target = get_cs_ins_immediate_target(cs_ins);
-            handle_control_flow(target, connections, blocks, unexplored_blocks, block);
-            // Conditional branch so we need to add a connection to the fall through path
-            if (is_cs_cflow_ins(cs_ins))
-                handle_control_flow(cs_ins->address + cs_ins->size, connections, blocks, unexplored_blocks, block);
+            if (target == 0)
+                break;
+            handle_control_flow(target, cs_ins->size, connections, blocks, unexplored_blocks, block, text_start, text_end);
+            // Conditional branch or a call so we need to add a connection to the fall through path
+            if ((is_cs_conditional_csflow_ins(cs_ins) || is_cs_call_ins(cs_ins)) && cs_ins->address + cs_ins->size < text_end)
+            {
+                handle_control_flow(cs_ins->address + cs_ins->size, cs_ins->size, connections, blocks, unexplored_blocks, block, text_start, text_end);
+            }
             break;
         }
+        if (is_start_of_block(blocks, cs_ins->address + cs_ins->size)) // If next instruction is the start of a block then stop
+            break;
     }
+    block->end_addr = cs_ins->address + cs_ins->size - 1;
 
     cs_free(cs_ins, 1);
 }
@@ -309,25 +394,27 @@ void generate_cfg(Elf *elf, csh handle)
 {
     std::queue<block_t *> found_blocks;
     std::set<block_t *> closed_blocks;
-    std::set<block_t *> allBlocks;
+    std::set<block_t *> all_blocks;
     std::map<block_t *, std::set<block_t *>> connections;
-    long unsigned text_start = 0;
-    long unsigned text_end = 0;
+    uint64_t text_start = 0;
+    uint64_t text_end = 0;
     Elf_Data *text = find_text(elf, &text_start, &text_end);
 
     if (!text)
         DIE("(find_text) %s", elf_errmsg(-1));
 
-    read_symbol_table(elf, &found_blocks, &allBlocks, text_start, text_end);
+    read_symbol_table(elf, &found_blocks, &all_blocks, text_start, text_end);
     while (!found_blocks.empty())
     {
         block_t *block = found_blocks.front();
         found_blocks.pop();
         if (closed_blocks.find(block) != closed_blocks.end())
             continue;
-        disas_r(handle, text, text_start, text_end, &connections, &allBlocks, &found_blocks, block);
+        disas_r(handle, text, text_start, text_end, &connections, &all_blocks, &found_blocks, block);
         closed_blocks.insert(block);
     }
+    print_graph(&connections, &all_blocks);
+    check_correctness(&all_blocks);
 }
 
 int main(int argc, char *argv[])

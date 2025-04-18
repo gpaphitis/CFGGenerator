@@ -1,0 +1,5 @@
+.vscode/**
+test*
+a.out
+cfggenerator
+disas-recursive.cc

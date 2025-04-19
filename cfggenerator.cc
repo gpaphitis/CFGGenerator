@@ -194,6 +194,11 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
     {
         if (cs_ins->id == X86_INS_INVALID || cs_ins->size == 0)
             break;
+        size_t len = strlen(cs_ins->mnemonic);
+        char *ins_mnemonic = (char *)malloc(len + 1);
+        strncpy(ins_mnemonic, cs_ins->mnemonic, len);
+        ins_mnemonic[len] = '\0';
+        block->instructions.insert({cs_ins->address, ins_mnemonic});
         if (is_cs_cflow_ins(cs_ins) == true)
         {
             block->end_addr = cs_ins->address + cs_ins->size - 1;
@@ -211,7 +216,6 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
         if (is_start_of_block(blocks, cs_ins->address + cs_ins->size)) // If next instruction is the start of a block then stop
             break;
     }
-    // block->end_addr = cs_ins->address + cs_ins->size - 1;
 
     cs_free(cs_ins, 1);
 }
@@ -219,7 +223,11 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
 void free_blocks(std::set<block_t *> *blocks)
 {
     for (block_t *block : *blocks)
-        free(block);
+    {
+        for (auto pair : block->instructions)
+            free(pair.second);
+        delete block;
+    }
 }
 
 void generate_cfg(csh handle, bool reachable_only)

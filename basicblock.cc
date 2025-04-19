@@ -13,11 +13,7 @@ static uint64_t counter = 0;
 
 block_t *create_basic_block()
 {
-    block_t *block = (block_t *)malloc(sizeof(block_t));
-    if (block == NULL)
-    {
-        DIE("(basicblock) %s", "malloc error");
-    }
+    block_t *block = new block_t();
     block->id = counter++;
     return block;
 }

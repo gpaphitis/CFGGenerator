@@ -8,8 +8,21 @@ void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::se
         perror("Unable to open file");
         return;
     }
-    fprintf(fd, "digraph G {\n");
+    fprintf(fd, "digraph G {    \nnode [shape=plaintext fontname=\"Courier\"];\n");
 
+    // Print block labels
+    for (block_t *block : *blocks)
+    {
+        fprintf(fd, "BB%lu [label=<\n    <TABLE BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"0\">\n        <TR><TD ALIGN=\"CENTER\"><B>BB%lu:</B></TD></TR>\n", block->id, block->id);
+        for (auto pair : block->instructions)
+        {
+            fprintf(fd, "        <TR><TD ALIGN=\"LEFT\">0x%lx: %s</TD></TR>\n", pair.first, pair.second);
+        }
+        fprintf(fd, "    </TABLE>\n>];\n");
+    }
+    fprintf(fd, "\n");
+
+    // Print blocks with connections
     for (block_t *block : *blocks)
     {
         auto pair = connections->find(block);
@@ -19,11 +32,13 @@ void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::se
             if (!block_connections->empty())
             {
                 for (block_t *connection : *block_connections)
-                    fprintf(fd, "    %lu -> %lu\n", block->id, connection->id);
+                    fprintf(fd, "    BB%lu -> BB%lu\n", block->id, connection->id);
             }
         }
     }
     fprintf(fd, "\n");
+
+    // Print blocks without connections
     for (block_t *block : *blocks)
     {
         auto pair = connections->find(block);
@@ -31,10 +46,10 @@ void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::se
         {
             std::set<block_t *> *block_connections = &(pair->second);
             if (block_connections->empty())
-                fprintf(fd, "    %lu\n", block->id);
+                fprintf(fd, "    BB%lu\n", block->id);
         }
         else
-            fprintf(fd, "    %lu\n", block->id);
+            fprintf(fd, "    BB%lu\n", block->id);
     }
     fprintf(fd, "}\n");
 

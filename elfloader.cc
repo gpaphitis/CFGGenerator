@@ -62,6 +62,8 @@ void add_symbol_blocks(std::queue<block_t *> *Q, std::set<block_t *> *blocks, ui
             (!strcmp("main", elf_strptr(elf, shdr.sh_link, sym.st_name)) || !reachable_only) &&
             (sym.st_value >= text_start && sym.st_value < text_end))
         {
+            if (!strcmp("goo", elf_strptr(elf, shdr.sh_link, sym.st_name)))
+                printf("Added\n");
             block_t *new_block = create_basic_block();
             new_block->start_addr = sym.st_value;
             new_block->end_addr = sym.st_value;

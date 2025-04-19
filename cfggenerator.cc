@@ -104,49 +104,40 @@ block_t *is_between_of_block(std::set<block_t *> *blocks, uint64_t target)
 
 void add_connection(std::map<block_t *, std::set<block_t *>> *connections, block_t *from, block_t *to)
 {
-    for (auto &pair : *connections)
+    auto pair = connections->find(from);
+    if (pair != connections->end())
     {
-        block_t *from_block = pair.first;
-        if (from_block == from)
+        std::set<block_t *> *block_connections = &(pair->second);
+        for (block_t *block : *block_connections)
         {
-            std::set<block_t *> *block_connections = &pair.second;
-            for (block_t *block : *block_connections)
-            {
-                if (block == to)
-                    return;
-            }
-            block_connections->insert(to);
-            return;
+            if (block == to)
+                return;
         }
+        block_connections->insert(to);
     }
-    connections->insert({from, std::set<block_t *>{to}});
+    else // Block's first connection
+        connections->insert({from, std::set<block_t *>{to}});
 }
 void remove_connection(std::map<block_t *, std::set<block_t *>> *connections, block_t *from, block_t *to)
 {
-    for (auto &pair : *connections)
+    auto pair = connections->find(from);
+    if (pair != connections->end())
     {
-        block_t *from_block = pair.first;
-        if (from_block == from)
-        {
-            std::set<block_t *> *block_connections = &pair.second;
-            block_connections->erase(to);
-        }
+        std::set<block_t *> *block_connections = &pair->second;
+        block_connections->erase(to);
     }
 }
 void switch_connection_origin(std::map<block_t *, std::set<block_t *>> *connections, block_t *from, block_t *new_from)
 {
-    for (auto &pair : *connections)
+    auto pair = connections->find(from);
+    if (pair != connections->end())
     {
-        block_t *from_block = pair.first;
-        if (from_block == from)
+        std::set<block_t *> *block_connections = &(pair->second);
+        for (block_t *block : *block_connections)
         {
-            std::set<block_t *> *block_connections = &pair.second;
-            for (block_t *block : *block_connections)
-            {
-                add_connection(connections, new_from, block);
-            }
-            block_connections->clear();
+            add_connection(connections, new_from, block);
         }
+        block_connections->clear();
     }
 }
 

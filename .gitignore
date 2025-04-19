@@ -6,3 +6,4 @@ disas-recursive.cc
 *.dot
 *.png
 *.o
+valgrind.txt

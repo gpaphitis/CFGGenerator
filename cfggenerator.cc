@@ -96,7 +96,7 @@ block_t *is_between_of_block(std::set<block_t *> *blocks, uint64_t target)
 {
     for (block_t *block : *blocks)
     {
-        if (block->start_addr < target && block->end_addr > target)
+        if (block->start_addr < target && target < block->end_addr)
             return block;
     }
     return NULL;
@@ -144,8 +144,8 @@ void switch_connection_origin(std::map<block_t *, std::set<block_t *>> *connecti
             for (block_t *block : *block_connections)
             {
                 add_connection(connections, new_from, block);
-                block_connections->erase(block);
             }
+            block_connections->clear();
         }
     }
 }
@@ -163,9 +163,9 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
         second_half->start_addr = target;
         second_half->end_addr = target_block->end_addr;
         target_block->end_addr = target - 1;
+        blocks->insert(second_half);
         if (second_half->start_addr >= text_start && second_half->end_addr <= text_end)
         {
-            blocks->insert(second_half);
             unexplored_blocks->push(second_half);
         }
         add_connection(connections, block, second_half);
@@ -176,14 +176,12 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
         target_block = create_basic_block();
         target_block->start_addr = target;
         target_block->end_addr = target;
+        blocks->insert(target_block);
         if (target_block->start_addr >= text_start)
         {
-            blocks->insert(target_block);
             unexplored_blocks->push(target_block);
-            add_connection(connections, block, target_block);
         }
-        else
-            free(target_block);
+        add_connection(connections, block, target_block);
     }
 }
 
@@ -207,6 +205,7 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
             break;
         if (is_cs_cflow_ins(cs_ins) == true)
         {
+            block->end_addr = cs_ins->address + cs_ins->size - 1;
             target = get_cs_ins_immediate_target(cs_ins);
             if (target == 0)
                 break;
@@ -221,7 +220,7 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
         if (is_start_of_block(blocks, cs_ins->address + cs_ins->size)) // If next instruction is the start of a block then stop
             break;
     }
-    block->end_addr = cs_ins->address + cs_ins->size - 1;
+    // block->end_addr = cs_ins->address + cs_ins->size - 1;
 
     cs_free(cs_ins, 1);
 }

@@ -180,8 +180,10 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
         {
             blocks->insert(target_block);
             unexplored_blocks->push(target_block);
+            add_connection(connections, block, target_block);
         }
-        add_connection(connections, block, target_block);
+        else
+            free(target_block);
     }
 }
 
@@ -224,7 +226,13 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
     cs_free(cs_ins, 1);
 }
 
-void generate_cfg(Elf *elf, csh handle, bool reachable_only)
+void free_blocks(std::set<block_t *> *blocks)
+{
+    for (block_t *block : *blocks)
+        free(block);
+}
+
+void generate_cfg(csh handle, bool reachable_only)
 {
     std::queue<block_t *> found_blocks;
     std::set<block_t *> closed_blocks;
@@ -232,12 +240,12 @@ void generate_cfg(Elf *elf, csh handle, bool reachable_only)
     std::map<block_t *, std::set<block_t *>> connections;
     uint64_t text_start = 0;
     uint64_t text_end = 0;
-    Elf_Data *text = find_text(elf, &text_start, &text_end);
+    Elf_Data *text = find_text(&text_start, &text_end);
 
     if (!text)
         DIE("(find_text) %s", elf_errmsg(-1));
 
-    add_symbol_blocks(elf, &found_blocks, &all_blocks, text_start, text_end, reachable_only);
+    add_symbol_blocks(&found_blocks, &all_blocks, text_start, text_end, reachable_only);
     while (!found_blocks.empty())
     {
         block_t *block = found_blocks.front();
@@ -252,6 +260,10 @@ void generate_cfg(Elf *elf, csh handle, bool reachable_only)
     print_graph(&connections, &all_blocks);
 #endif
     output_graph(&connections, &all_blocks);
+    free_blocks(&all_blocks);
+    closed_blocks.clear();
+    all_blocks.clear();
+    connections.clear();
 }
 
 int main(int argc, char *argv[])
@@ -267,15 +279,8 @@ int main(int argc, char *argv[])
 
     /* detail mode.  */
     cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-    /* Initilization.  */
-    if (elf_version(EV_CURRENT) == EV_NONE)
-        DIE("(version) %s", elf_errmsg(-1));
 
-    int fd = open(argv[1], O_RDONLY);
-
-    Elf *elf = elf_begin(fd, ELF_C_READ, NULL);
-    if (!elf)
-        DIE("(begin) %s", elf_errmsg(-1));
+    initialize_elf_loader(argv[1]);
 
     bool reachable_only = false;
     int opt;
@@ -295,9 +300,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    generate_cfg(elf, handle, reachable_only);
+    generate_cfg(handle, reachable_only);
 
     cs_close(&handle);
+    free_elf_loader();
 
     return 1;
 }

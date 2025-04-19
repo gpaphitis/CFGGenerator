@@ -1,93 +1,15 @@
-==14592== Memcheck, a memory error detector
-==14592== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
-==14592== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
-==14592== Command: ./a.out test
-==14592== Parent PID: 2292
-==14592== 
-==14592== Conditional jump or move depends on uninitialised value(s)
-==14592==    at 0x10B075: is_between_of_block(std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, unsigned long) (cfggenerator.cc:227)
-==14592==    by 0x10B644: handle_control_flow(unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*, unsigned long, unsigned long) (cfggenerator.cc:288)
-==14592==    by 0x10B896: disas_r(unsigned long, Elf_Data*, unsigned long, unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*) (cfggenerator.cc:338)
-==14592==    by 0x10BB5B: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:372)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== Conditional jump or move depends on uninitialised value(s)
-==14592==    at 0x10B075: is_between_of_block(std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, unsigned long) (cfggenerator.cc:227)
-==14592==    by 0x10B644: handle_control_flow(unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*, unsigned long, unsigned long) (cfggenerator.cc:288)
-==14592==    by 0x10B916: disas_r(unsigned long, Elf_Data*, unsigned long, unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*) (cfggenerator.cc:342)
-==14592==    by 0x10BB5B: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:372)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 
-==14592== HEAP SUMMARY:
-==14592==     in use at exit: 10,610 bytes in 27 blocks
-==14592==   total heap usage: 134 allocs, 107 frees, 152,338 bytes allocated
-==14592== 
-==14592== 96 bytes in 6 blocks are definitely lost in loss record 1 of 8
-==14592==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x10B70A: handle_control_flow(unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*, unsigned long, unsigned long) (cfggenerator.cc:304)
-==14592==    by 0x10B896: disas_r(unsigned long, Elf_Data*, unsigned long, unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*) (cfggenerator.cc:338)
-==14592==    by 0x10BB5B: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:372)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 128 bytes in 8 blocks are definitely lost in loss record 2 of 8
-==14592==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x10AC64: read_symbol_table(Elf*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, unsigned long, unsigned long) (cfggenerator.cc:168)
-==14592==    by 0x10BAA2: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:365)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 128 bytes in 8 blocks are definitely lost in loss record 3 of 8
-==14592==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x10B70A: handle_control_flow(unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*, unsigned long, unsigned long) (cfggenerator.cc:304)
-==14592==    by 0x10B916: disas_r(unsigned long, Elf_Data*, unsigned long, unsigned long, std::map<block_t*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >, std::less<block_t*>, std::allocator<std::pair<block_t* const, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> > > > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, block_t*) (cfggenerator.cc:342)
-==14592==    by 0x10BB5B: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:372)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 287 bytes in 1 blocks are indirectly lost in loss record 4 of 8
-==14592==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x4EC0A4E: ??? (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x4ECF849: elf_strptr (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x10AE06: find_text(Elf*, unsigned long*, unsigned long*) (cfggenerator.cc:193)
-==14592==    by 0x10BA1D: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:360)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 387 bytes in 1 blocks are indirectly lost in loss record 5 of 8
-==14592==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x4EC0A4E: ??? (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x4EC85A8: elf_getdata (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x10AE3B: find_text(Elf*, unsigned long*, unsigned long*) (cfggenerator.cc:195)
-==14592==    by 0x10BA1D: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:360)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 888 bytes in 1 blocks are indirectly lost in loss record 6 of 8
-==14592==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x4EC0A4E: ??? (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x4EC85A8: elf_getdata (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x10ABF0: read_symbol_table(Elf*, std::queue<block_t*, std::deque<block_t*, std::allocator<block_t*> > >*, std::set<block_t*, std::less<block_t*>, std::allocator<block_t*> >*, unsigned long, unsigned long) (cfggenerator.cc:158)
-==14592==    by 0x10BAA2: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:365)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 1,984 bytes in 1 blocks are indirectly lost in loss record 7 of 8
-==14592==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x4EC0271: ??? (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x4EC82A4: gelf_getshdr (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x10AD94: find_text(Elf*, unsigned long*, unsigned long*) (cfggenerator.cc:189)
-==14592==    by 0x10BA1D: generate_cfg(Elf*, unsigned long) (cfggenerator.cc:360)
-==14592==    by 0x10BDCD: main (cfggenerator.cc:401)
-==14592== 
-==14592== 10,258 (6,712 direct, 3,546 indirect) bytes in 1 blocks are definitely lost in loss record 8 of 8
-==14592==    at 0x484D953: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==14592==    by 0x4EC3104: ??? (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x4EC409D: ??? (in /usr/lib/x86_64-linux-gnu/libelf-0.190.so)
-==14592==    by 0x10BD66: main (cfggenerator.cc:397)
-==14592== 
-==14592== LEAK SUMMARY:
-==14592==    definitely lost: 7,064 bytes in 23 blocks
-==14592==    indirectly lost: 3,546 bytes in 4 blocks
-==14592==      possibly lost: 0 bytes in 0 blocks
-==14592==    still reachable: 0 bytes in 0 blocks
-==14592==         suppressed: 0 bytes in 0 blocks
-==14592== 
-==14592== Use --track-origins=yes to see where uninitialised values come from
-==14592== For lists of detected and suppressed errors, rerun with: -s
-==14592== ERROR SUMMARY: 63 errors from 6 contexts (suppressed: 0 from 0)
+==15107== Memcheck, a memory error detector
+==15107== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==15107== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==15107== Command: ./cfggenerator test
+==15107== Parent PID: 2397
+==15107== 
+==15107== 
+==15107== HEAP SUMMARY:
+==15107==     in use at exit: 0 bytes in 0 blocks
+==15107==   total heap usage: 169 allocs, 169 frees, 163,149 bytes allocated
+==15107== 
+==15107== All heap blocks were freed -- no leaks are possible
+==15107== 
+==15107== For lists of detected and suppressed errors, rerun with: -s
+==15107== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

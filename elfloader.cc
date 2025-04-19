@@ -9,7 +9,20 @@
         exit(EXIT_FAILURE);           \
     } while (0)
 
-void add_symbol_blocks(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end, bool reachable_only)
+static Elf *elf;
+
+void initialize_elf_loader(char *filename)
+{
+    if (elf_version(EV_CURRENT) == EV_NONE)
+        DIE("(version) %s", elf_errmsg(-1));
+    int fd = open(filename, O_RDONLY);
+
+    elf = elf_begin(fd, ELF_C_READ, NULL);
+    if (!elf)
+        DIE("(version) %s", elf_errmsg(-1));
+}
+
+void add_symbol_blocks(std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end, bool reachable_only)
 {
     Elf_Scn *scn = NULL;
     Elf_Scn *symtab = NULL;
@@ -49,7 +62,7 @@ void add_symbol_blocks(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *
             (!strcmp("main", elf_strptr(elf, shdr.sh_link, sym.st_name)) || !reachable_only) &&
             (sym.st_value >= text_start && sym.st_value < text_end))
         {
-            block_t *new_block=create_basic_block();
+            block_t *new_block = create_basic_block();
             new_block->start_addr = sym.st_value;
             new_block->end_addr = sym.st_value;
             Q->push(new_block);
@@ -58,7 +71,7 @@ void add_symbol_blocks(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *
     }
 }
 
-Elf_Data *find_text(Elf *elf, uint64_t *text_start, uint64_t *text_end)
+Elf_Data *find_text(uint64_t *text_start, uint64_t *text_end)
 {
     Elf_Scn *scn = NULL;
     GElf_Shdr shdr;
@@ -88,4 +101,9 @@ Elf_Data *find_text(Elf *elf, uint64_t *text_start, uint64_t *text_end)
         }
     }
     return NULL;
+}
+
+void free_elf_loader()
+{
+    elf_end(elf);
 }

@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -Werror -g
+CFLAGS = -Wall -Werror -g -DDEBUG
 LDFLAGS = -lelf -lcapstone
 SRC = cfggenerator.cc basicblock.cc elfloader.cc instructions.cc graph.cc
 OBJ = $(SRC:.cc=.o)

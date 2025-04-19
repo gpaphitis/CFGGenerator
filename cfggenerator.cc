@@ -213,8 +213,12 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
             }
             break;
         }
-        if (is_start_of_block(blocks, cs_ins->address + cs_ins->size)) // If next instruction is the start of a block then stop
+        block_t *next_block = NULL;
+        if ((next_block = is_start_of_block(blocks, cs_ins->address + cs_ins->size)) != NULL) // If next instruction is the start of a block then stop
+        {
+            add_connection(connections, block, next_block);
             break;
+        }
     }
 
     cs_free(cs_ins, 1);

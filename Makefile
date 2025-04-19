@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -Werror -g -DDEBUG
+CFLAGS = -Wall -Werror -g
 LDFLAGS = -lelf -lcapstone
 SRC = cfggenerator.cc basicblock.cc elfloader.cc instructions.cc graph.cc
 OBJ = $(SRC:.cc=.o)
@@ -15,5 +15,7 @@ $(TARGET): $(OBJ)
 
 clean:
 	rm -f $(OBJ) $(TARGET)
+	rm *.dot
+	rm *.png
 
 .PHONY: all clean

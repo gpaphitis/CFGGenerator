@@ -1,0 +1,91 @@
+#include "elfloader.h"
+
+#define TOOL "elfloader"
+#define DIE(...)                      \
+    do                                \
+    {                                 \
+        fprintf(stderr, __VA_ARGS__); \
+        fputc('\n', stderr);          \
+        exit(EXIT_FAILURE);           \
+    } while (0)
+
+void add_symbol_blocks(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end, bool reachable_only)
+{
+    Elf_Scn *scn = NULL;
+    Elf_Scn *symtab = NULL;
+    Elf_Data *data;
+    GElf_Shdr shdr;
+    size_t shstrndx;
+
+    if (elf_getshdrstrndx(elf, &shstrndx) != 0)
+        DIE("(getshdrstrndx) %s", elf_errmsg(-1));
+
+    /* Loop over sections.  */
+    while ((scn = elf_nextscn(elf, scn)) != NULL)
+    {
+        if (gelf_getshdr(scn, &shdr) != &shdr)
+            DIE("(getshdr) %s", elf_errmsg(-1));
+
+        /* Locate symbol table.  */
+        if (!strcmp(elf_strptr(elf, shstrndx, shdr.sh_name), ".symtab"))
+        {
+            symtab = scn;
+            break;
+        }
+    }
+
+    /* Get the descriptor.  */
+    if (gelf_getshdr(symtab, &shdr) != &shdr)
+        DIE("(getshdr) %s", elf_errmsg(-1));
+
+    data = elf_getdata(symtab, NULL);
+    int count = shdr.sh_size / shdr.sh_entsize;
+
+    for (int i = 0; i < count; ++i)
+    {
+        GElf_Sym sym;
+        gelf_getsym(data, i, &sym);
+        if (ELF64_ST_TYPE(sym.st_info) == STT_FUNC &&
+            (!strcmp("main", elf_strptr(elf, shdr.sh_link, sym.st_name)) || !reachable_only) &&
+            (sym.st_value >= text_start && sym.st_value < text_end))
+        {
+            block_t *new_block=create_basic_block();
+            new_block->start_addr = sym.st_value;
+            new_block->end_addr = sym.st_value;
+            Q->push(new_block);
+            blocks->insert(new_block);
+        }
+    }
+}
+
+Elf_Data *find_text(Elf *elf, uint64_t *text_start, uint64_t *text_end)
+{
+    Elf_Scn *scn = NULL;
+    GElf_Shdr shdr;
+    size_t shstrndx;
+    Elf_Data *data = NULL;
+
+    if (elf_getshdrstrndx(elf, &shstrndx) != 0)
+        DIE("(getshdrstrndx) %s", elf_errmsg(-1));
+
+    /* Loop over sections.  */
+    while ((scn = elf_nextscn(elf, scn)) != NULL)
+    {
+        if (gelf_getshdr(scn, &shdr) != &shdr)
+            DIE("(getshdr) %s", elf_errmsg(-1));
+
+        /* Locate .text  */
+        if (!strcmp(elf_strptr(elf, shstrndx, shdr.sh_name), ".text"))
+        {
+            data = elf_getdata(scn, data);
+            if (!data)
+                DIE("(getdata) %s", elf_errmsg(-1));
+
+            *text_start = shdr.sh_addr;
+            *text_end = *text_start + shdr.sh_size;
+
+            return (data);
+        }
+    }
+    return NULL;
+}

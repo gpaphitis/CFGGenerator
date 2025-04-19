@@ -19,6 +19,11 @@
 
 #include <getopt.h>
 
+#include "elfloader.h"
+#include "basicblock.h"
+#include "instructions.h"
+#include "graph.h"
+
 #define DIE(...)                      \
     do                                \
     {                                 \
@@ -26,13 +31,6 @@
         fputc('\n', stderr);          \
         exit(EXIT_FAILURE);           \
     } while (0)
-
-typedef struct
-{
-    uint64_t id;
-    uint64_t start_addr;
-    uint64_t end_addr;
-} block_t;
 
 struct option long_options[] = {
     {"reachable-only", no_argument, 0, 'r'},
@@ -67,28 +65,6 @@ void print_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set
     }
 }
 
-void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks)
-{
-    FILE *fd = fopen("graph.dot", "w");
-    if (fd == NULL)
-    {
-        perror("Unable to open file");
-        return;
-    }
-    fprintf(fd, "digraph G {\n");
-    for (auto &pair : *connections)
-    {
-        block_t *from_block = pair.first;
-        std::set<block_t *> *block_connections = &pair.second;
-        for (block_t *connection : *block_connections)
-            fprintf(fd, "    %lu -> %lu\n", from_block->id, connection->id);
-    }
-    fprintf(fd, "}\n");
-
-    // Close the file
-    fclose(fd);
-}
-
 void check_correctness(std::set<block_t *> *blocks)
 {
     for (block_t *block : *blocks)
@@ -105,183 +81,6 @@ void check_correctness(std::set<block_t *> *blocks)
             }
         }
     }
-}
-
-bool is_cs_cflow_group(uint8_t g)
-{
-    return (g == CS_GRP_JUMP) || (g == CS_GRP_CALL) || (g == CS_GRP_RET) || (g == CS_GRP_IRET);
-}
-
-bool is_cs_cflow_ins(cs_insn *ins)
-{
-    for (size_t i = 0; i < ins->detail->groups_count; i++)
-    {
-        if (is_cs_cflow_group(ins->detail->groups[i]))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool is_cs_call_ins(cs_insn *ins)
-{
-    return ins->id == X86_INS_CALL;
-}
-
-bool is_cs_unconditional_csflow_ins(cs_insn *ins)
-{
-    switch (ins->id)
-    {
-    case X86_INS_JMP:    // Unconditional jump
-    case X86_INS_LJMP:   // Far jump
-    case X86_INS_RET:    // Near return
-    case X86_INS_RETF:   // Far return (16-bit operand)
-    case X86_INS_RETFQ:  // Far return (64-bit operand)
-    case X86_INS_SYSRET: // Return from syscall
-    case X86_INS_IRET:   // Interrupt return (16-bit)
-    case X86_INS_IRETD:  // Interrupt return (32-bit)
-    case X86_INS_IRETQ:  // Interrupt return (64-bit)
-        return true;
-    default:
-        return false;
-    }
-}
-
-bool is_cs_conditional_csflow_ins(cs_insn *ins)
-{
-    switch (ins->id)
-    {
-    case X86_INS_JA:
-    case X86_INS_JAE:
-    case X86_INS_JB:
-    case X86_INS_JBE:
-    case X86_INS_JCXZ:
-    case X86_INS_JECXZ:
-    case X86_INS_JRCXZ:
-    case X86_INS_JE:
-    case X86_INS_JG:
-    case X86_INS_JGE:
-    case X86_INS_JL:
-    case X86_INS_JLE:
-    case X86_INS_JNE:
-    case X86_INS_JNO:
-    case X86_INS_JNP:
-    case X86_INS_JNS:
-    case X86_INS_JO:
-    case X86_INS_JP:
-    case X86_INS_JS:
-        return true;
-    default:
-        return false;
-    }
-}
-
-uint64_t get_cs_ins_immediate_target(cs_insn *ins)
-{
-    cs_x86_op *cs_op;
-
-    for (size_t i = 0; i < ins->detail->groups_count; i++)
-    {
-        if (is_cs_cflow_group(ins->detail->groups[i]))
-        {
-            for (size_t j = 0; j < ins->detail->x86.op_count; j++)
-            {
-                cs_op = &ins->detail->x86.operands[j];
-                if (cs_op->type == X86_OP_IMM)
-                    return cs_op->imm;
-            }
-        }
-    }
-    return 0;
-}
-
-void add_symbol_blocks(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end, bool reachable_only)
-{
-    Elf_Scn *scn = NULL;
-    Elf_Scn *symtab = NULL;
-    Elf_Data *data;
-    GElf_Shdr shdr;
-    size_t shstrndx;
-
-    if (elf_getshdrstrndx(elf, &shstrndx) != 0)
-        DIE("(getshdrstrndx) %s", elf_errmsg(-1));
-
-    /* Loop over sections.  */
-    while ((scn = elf_nextscn(elf, scn)) != NULL)
-    {
-        if (gelf_getshdr(scn, &shdr) != &shdr)
-            DIE("(getshdr) %s", elf_errmsg(-1));
-
-        /* Locate symbol table.  */
-        if (!strcmp(elf_strptr(elf, shstrndx, shdr.sh_name), ".symtab"))
-        {
-            symtab = scn;
-            break;
-        }
-    }
-
-    /* Get the descriptor.  */
-    if (gelf_getshdr(symtab, &shdr) != &shdr)
-        DIE("(getshdr) %s", elf_errmsg(-1));
-
-    data = elf_getdata(symtab, NULL);
-    int count = shdr.sh_size / shdr.sh_entsize;
-
-    for (int i = 0; i < count; ++i)
-    {
-        GElf_Sym sym;
-        gelf_getsym(data, i, &sym);
-        if (ELF64_ST_TYPE(sym.st_info) == STT_FUNC &&
-            (!strcmp("main", elf_strptr(elf, shdr.sh_link, sym.st_name)) || !reachable_only) &&
-            (sym.st_value >= text_start && sym.st_value < text_end))
-        {
-            block_t *newBlock = (block_t *)malloc(sizeof(block_t));
-            newBlock->id = counter++;
-            newBlock->start_addr = sym.st_value;
-            newBlock->end_addr = sym.st_value;
-            Q->push(newBlock);
-            blocks->insert(newBlock);
-        }
-    }
-}
-
-Elf_Data *find_text(Elf *elf, uint64_t *text_start, uint64_t *text_end)
-{
-    Elf_Scn *scn = NULL;
-    GElf_Shdr shdr;
-    size_t shstrndx;
-    Elf_Data *data = NULL;
-
-    if (elf_getshdrstrndx(elf, &shstrndx) != 0)
-        DIE("(getshdrstrndx) %s", elf_errmsg(-1));
-
-    /* Loop over sections.  */
-    while ((scn = elf_nextscn(elf, scn)) != NULL)
-    {
-        if (gelf_getshdr(scn, &shdr) != &shdr)
-            DIE("(getshdr) %s", elf_errmsg(-1));
-
-        /* Locate .text  */
-        if (!strcmp(elf_strptr(elf, shstrndx, shdr.sh_name), ".text"))
-        {
-            data = elf_getdata(scn, data);
-            if (!data)
-                DIE("(getdata) %s", elf_errmsg(-1));
-
-            *text_start = shdr.sh_addr;
-            *text_end = *text_start + shdr.sh_size;
-
-            return (data);
-        }
-    }
-    return NULL;
-}
-
-void print_ins(cs_insn *ins)
-{
-
-    fprintf(stderr, "0x%016lx:\t%s\t\t%s\n", ins->address, ins->mnemonic, ins->op_str);
 }
 
 block_t *is_start_of_block(std::set<block_t *> *blocks, uint64_t target)
@@ -360,8 +159,7 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
     }
     else if ((target_block = is_between_of_block(blocks, target)) != NULL) // We have a jump to the middle of a block so we need to split the block
     {
-        block_t *second_half = (block_t *)malloc(sizeof(block_t));
-        second_half->id = counter++;
+        block_t *second_half = create_basic_block();
         second_half->start_addr = target;
         second_half->end_addr = target_block->end_addr;
         target_block->end_addr = target - 1;
@@ -375,8 +173,7 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
     }
     else
     {
-        target_block = (block_t *)malloc(sizeof(block_t));
-        target_block->id = counter++;
+        target_block = create_basic_block();
         target_block->start_addr = target;
         target_block->end_addr = target;
         if (target_block->start_addr >= text_start)
@@ -388,7 +185,7 @@ void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *
     }
 }
 
-void disas_r(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block)
+void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block)
 {
     uint64_t addr, offset, target;
     const uint8_t *pc;
@@ -412,8 +209,6 @@ void disas_r(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end,
             if (target == 0)
                 break;
             handle_control_flow(target, connections, blocks, unexplored_blocks, block, text_start, text_end);
-            if (block->start_addr == 0x401100)
-                print_connections(connections, block);
             // Conditional branch or a call so we need to add a connection to the fall through path
             if ((is_cs_conditional_csflow_ins(cs_ins) || is_cs_call_ins(cs_ins)) && cs_ins->address + cs_ins->size < text_end)
             {
@@ -449,11 +244,13 @@ void generate_cfg(Elf *elf, csh handle, bool reachable_only)
         found_blocks.pop();
         if (closed_blocks.find(block) != closed_blocks.end())
             continue;
-        disas_r(handle, text, text_start, text_end, &connections, &all_blocks, &found_blocks, block);
+        process_block(handle, text, text_start, text_end, &connections, &all_blocks, &found_blocks, block);
         closed_blocks.insert(block);
     }
     check_correctness(&all_blocks);
+#ifdef DEBUG
     print_graph(&connections, &all_blocks);
+#endif
     output_graph(&connections, &all_blocks);
 }
 

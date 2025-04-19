@@ -5,3 +5,4 @@ cfggenerator
 disas-recursive.cc
 *.dot
 *.png
+*.o

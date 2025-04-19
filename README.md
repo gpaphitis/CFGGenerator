@@ -1,15 +1,22 @@
 # CFG Visualizer
-A simple tool that constructs Control Flow Graph (CFG) of ELF binaries.  
+A simple tool that constructs and visualizes the Control Flow Graph (CFG) of an ELF binary.  
+It uses [Capstone](http://www.capstone-engine.org/) for disassembly and outputs a `.dot` file for visualization via Graphviz.
 
 ## Features
-- Disassembles using [Capstone](http://www.capstone-engine.org/)
+- Constructs the Control Flow Graph (CFG) for either all functions or only those reachable from main
+- Outputs a Graphviz-compatible `.dot` file for visualization
 - Supports x86_64 binaries (ELF format)
 
 ## Dependencies
-- libcapstone2
+- [Capstone](http://www.capstone-engine.org/)
+- Graphviz (for rendering `.dot` files)
 
 ## Compilation
 g++ -Wall -Werror cfggenerator.cc -lcapstone -lelf -o cfggenerator
 
 ## Usage
-./cfggenerator ./test_binary
+./a.out ./test_binary [--reachable-only|-r] [--help|-h]
+
+## Options
+- -r, --reachable-only	Only output blocks reachable from main
+- -h, --help	Show usage information

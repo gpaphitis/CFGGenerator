@@ -17,7 +17,7 @@
 #include <map>
 #include <set>
 
-#include <cassert>
+#include <getopt.h>
 
 #define DIE(...)                      \
     do                                \
@@ -29,9 +29,18 @@
 
 typedef struct
 {
+    uint64_t id;
     uint64_t start_addr;
     uint64_t end_addr;
 } block_t;
+
+struct option long_options[] = {
+    {"reachable-only", no_argument, 0, 'r'},
+    {"full", no_argument, 0, 'r'},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+uint64_t counter = 0;
 
 void print_connections(std::map<block_t *, std::set<block_t *>> *connections, block_t *block)
 {
@@ -42,7 +51,7 @@ void print_connections(std::map<block_t *, std::set<block_t *>> *connections, bl
         {
             std::set<block_t *> *block_connections = &pair.second;
             for (block_t *connection : *block_connections)
-                printf("\t0x%lx - 0x%lx\n", connection->start_addr, connection->end_addr);
+                printf("\t%lu 0x%lx - 0x%lx\n", connection->id, connection->start_addr, connection->end_addr);
             return;
         }
     }
@@ -53,10 +62,33 @@ void print_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set
     printf("GRAPH\n");
     for (block_t *block : *blocks)
     {
-        printf("0x%lx - 0x%lx\n", block->start_addr, block->end_addr);
+        printf("%lu 0x%lx - 0x%lx\n", block->id, block->start_addr, block->end_addr);
         print_connections(connections, block);
     }
 }
+
+void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks)
+{
+    FILE *fd = fopen("graph.dot", "w");
+    if (fd == NULL)
+    {
+        perror("Unable to open file");
+        return;
+    }
+    fprintf(fd, "digraph G {\n");
+    for (auto &pair : *connections)
+    {
+        block_t *from_block = pair.first;
+        std::set<block_t *> *block_connections = &pair.second;
+        for (block_t *connection : *block_connections)
+            fprintf(fd, "    %lu -> %lu\n", from_block->id, connection->id);
+    }
+    fprintf(fd, "}\n");
+
+    // Close the file
+    fclose(fd);
+}
+
 void check_correctness(std::set<block_t *> *blocks)
 {
     for (block_t *block : *blocks)
@@ -164,7 +196,7 @@ uint64_t get_cs_ins_immediate_target(cs_insn *ins)
     return 0;
 }
 
-void read_symbol_table(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end)
+void add_symbol_blocks(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end, bool reachable_only)
 {
     Elf_Scn *scn = NULL;
     Elf_Scn *symtab = NULL;
@@ -201,9 +233,11 @@ void read_symbol_table(Elf *elf, std::queue<block_t *> *Q, std::set<block_t *> *
         GElf_Sym sym;
         gelf_getsym(data, i, &sym);
         if (ELF64_ST_TYPE(sym.st_info) == STT_FUNC &&
+            (!strcmp("main", elf_strptr(elf, shdr.sh_link, sym.st_name)) || !reachable_only) &&
             (sym.st_value >= text_start && sym.st_value < text_end))
         {
             block_t *newBlock = (block_t *)malloc(sizeof(block_t));
+            newBlock->id = counter++;
             newBlock->start_addr = sym.st_value;
             newBlock->end_addr = sym.st_value;
             Q->push(newBlock);
@@ -317,7 +351,7 @@ void switch_connection_origin(std::map<block_t *, std::set<block_t *>> *connecti
     }
 }
 
-void handle_control_flow(uint64_t target, uint16_t size, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block, uint64_t text_start, uint64_t text_end)
+void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block, uint64_t text_start, uint64_t text_end)
 {
     block_t *target_block = NULL;
     if ((target_block = is_start_of_block(blocks, target)) != NULL)
@@ -327,6 +361,7 @@ void handle_control_flow(uint64_t target, uint16_t size, std::map<block_t *, std
     else if ((target_block = is_between_of_block(blocks, target)) != NULL) // We have a jump to the middle of a block so we need to split the block
     {
         block_t *second_half = (block_t *)malloc(sizeof(block_t));
+        second_half->id = counter++;
         second_half->start_addr = target;
         second_half->end_addr = target_block->end_addr;
         target_block->end_addr = target - 1;
@@ -341,6 +376,7 @@ void handle_control_flow(uint64_t target, uint16_t size, std::map<block_t *, std
     else
     {
         target_block = (block_t *)malloc(sizeof(block_t));
+        target_block->id = counter++;
         target_block->start_addr = target;
         target_block->end_addr = target;
         if (target_block->start_addr >= text_start)
@@ -348,6 +384,7 @@ void handle_control_flow(uint64_t target, uint16_t size, std::map<block_t *, std
             blocks->insert(target_block);
             unexplored_blocks->push(target_block);
         }
+        add_connection(connections, block, target_block);
     }
 }
 
@@ -374,11 +411,13 @@ void disas_r(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end,
             target = get_cs_ins_immediate_target(cs_ins);
             if (target == 0)
                 break;
-            handle_control_flow(target, cs_ins->size, connections, blocks, unexplored_blocks, block, text_start, text_end);
+            handle_control_flow(target, connections, blocks, unexplored_blocks, block, text_start, text_end);
+            if (block->start_addr == 0x401100)
+                print_connections(connections, block);
             // Conditional branch or a call so we need to add a connection to the fall through path
             if ((is_cs_conditional_csflow_ins(cs_ins) || is_cs_call_ins(cs_ins)) && cs_ins->address + cs_ins->size < text_end)
             {
-                handle_control_flow(cs_ins->address + cs_ins->size, cs_ins->size, connections, blocks, unexplored_blocks, block, text_start, text_end);
+                handle_control_flow(cs_ins->address + cs_ins->size, connections, blocks, unexplored_blocks, block, text_start, text_end);
             }
             break;
         }
@@ -390,7 +429,7 @@ void disas_r(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end,
     cs_free(cs_ins, 1);
 }
 
-void generate_cfg(Elf *elf, csh handle)
+void generate_cfg(Elf *elf, csh handle, bool reachable_only)
 {
     std::queue<block_t *> found_blocks;
     std::set<block_t *> closed_blocks;
@@ -403,7 +442,7 @@ void generate_cfg(Elf *elf, csh handle)
     if (!text)
         DIE("(find_text) %s", elf_errmsg(-1));
 
-    read_symbol_table(elf, &found_blocks, &all_blocks, text_start, text_end);
+    add_symbol_blocks(elf, &found_blocks, &all_blocks, text_start, text_end, reachable_only);
     while (!found_blocks.empty())
     {
         block_t *block = found_blocks.front();
@@ -413,8 +452,9 @@ void generate_cfg(Elf *elf, csh handle)
         disas_r(handle, text, text_start, text_end, &connections, &all_blocks, &found_blocks, block);
         closed_blocks.insert(block);
     }
-    print_graph(&connections, &all_blocks);
     check_correctness(&all_blocks);
+    print_graph(&connections, &all_blocks);
+    output_graph(&connections, &all_blocks);
 }
 
 int main(int argc, char *argv[])
@@ -440,8 +480,25 @@ int main(int argc, char *argv[])
     if (!elf)
         DIE("(begin) %s", elf_errmsg(-1));
 
-    generate_cfg(elf, handle);
-    // disas_r(argv[1], handle);
+    bool reachable_only = false;
+    int opt;
+    while ((opt = getopt_long(argc, argv, "rh", long_options, NULL)) != -1)
+    {
+        switch (opt)
+        {
+        case 'r':
+            reachable_only = true;
+            break;
+        case 'h':
+            printf("Usage: %s ./test_binary [--reachable-only|-r] [--help|-h]\n", argv[0]);
+            exit(0);
+        default:
+            fprintf(stderr, "Unknown option. Use --help for usage.\n");
+            exit(1);
+        }
+    }
+
+    generate_cfg(elf, handle, reachable_only);
 
     cs_close(&handle);
 

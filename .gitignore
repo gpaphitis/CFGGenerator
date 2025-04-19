@@ -3,3 +3,5 @@ test*
 a.out
 cfggenerator
 disas-recursive.cc
+*.dot
+*.png

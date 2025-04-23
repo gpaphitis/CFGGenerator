@@ -12,7 +12,9 @@ It uses [Capstone](http://www.capstone-engine.org/) for disassembly and outputs 
 - Graphviz (for rendering `.dot` files)
 
 ## Compilation
-g++ -Wall -Werror cfggenerator.cc -lcapstone -lelf -o cfggenerator
+```bash
+make
+```
 
 ## Usage
 ./a.out ./test_binary [--reachable-only|-r] [--help|-h]

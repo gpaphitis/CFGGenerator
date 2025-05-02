@@ -7,7 +7,7 @@
 #include <map>
 #include <set>
 
-#include "basicblock.h"
+#include "cfgtypes.h"
 
-void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks);
+void output_graph(cfg_t *cfg);
 #endif

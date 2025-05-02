@@ -37,7 +37,7 @@ void print_graph(cfg_t *cfg)
 
 void output_cfg(cfg_t *cfg)
 {
-    output_graph(&(cfg->connections), &(cfg->blocks));
+    output_graph(cfg);
 }
 
 void check_correctness(cfg_t *cfg)

@@ -1,6 +1,6 @@
 #include "graph.h"
 
-void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks)
+void output_graph(cfg_t *cfg)
 {
     FILE *fd = fopen("graph.dot", "w");
     if (fd == NULL)
@@ -11,7 +11,7 @@ void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::se
     fprintf(fd, "digraph G {    \nnode [shape=plaintext fontname=\"Courier\"];\n");
 
     // Print block labels
-    for (block_t *block : *blocks)
+    for (block_t *block : cfg->blocks)
     {
         fprintf(fd, "BB%lu [label=<\n    <TABLE BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"0\">\n        <TR><TD ALIGN=\"CENTER\"><B>BB%lu:</B></TD></TR>\n", block->id, block->id);
         for (auto pair : block->instructions)
@@ -23,10 +23,10 @@ void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::se
     fprintf(fd, "\n");
 
     // Print blocks with connections
-    for (block_t *block : *blocks)
+    for (block_t *block : cfg->blocks)
     {
-        auto pair = connections->find(block);
-        if (pair != connections->end())
+        auto pair = cfg->connections.find(block);
+        if (pair != cfg->connections.end())
         {
             std::set<block_t *> *block_connections = &(pair->second);
             if (!block_connections->empty())
@@ -39,10 +39,10 @@ void output_graph(std::map<block_t *, std::set<block_t *>> *connections, std::se
     fprintf(fd, "\n");
 
     // Print blocks without connections
-    for (block_t *block : *blocks)
+    for (block_t *block : cfg->blocks)
     {
-        auto pair = connections->find(block);
-        if (pair != connections->end())
+        auto pair = cfg->connections.find(block);
+        if (pair != cfg->connections.end())
         {
             std::set<block_t *> *block_connections = &(pair->second);
             if (block_connections->empty())

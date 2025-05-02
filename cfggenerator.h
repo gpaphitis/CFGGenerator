@@ -10,29 +10,15 @@
 
 #include <string.h>
 
-#include <libelf.h>
-#include <gelf.h>
-#include <capstone/capstone.h>
-
 #include <queue>
 #include <map>
 #include <set>
 
-#include <getopt.h>
-
+#include "cfgtypes.h"
 #include "elfloader.h"
 #include "basicblock.h"
 #include "instructions.h"
 #include "graph.h"
-
-struct cfg_t
-{
-    std::set<block_t *> blocks;
-    std::map<block_t *, std::set<block_t *>> connections;
-    cfg_t()
-    {
-    }
-};
 
 void print_connections(cfg_t *cfg, block_t *block);
 void print_graph(cfg_t *cfg);

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <getopt.h>
 #include "cfggenerator.h"
 
 struct option long_options[] = {

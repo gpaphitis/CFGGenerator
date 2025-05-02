@@ -11,6 +11,7 @@
 #include <map>
 #include <set>
 
+#include "cfgtypes.h"
 #include "basicblock.h"
 
 void initialize_elf_loader(char *filename);

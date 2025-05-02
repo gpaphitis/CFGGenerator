@@ -1,28 +1,4 @@
-
-#include <stddef.h>
-#include <stdlib.h>
-#include <stdio.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <string.h>
-
-#include <libelf.h>
-#include <gelf.h>
-#include <capstone/capstone.h>
-
-#include <queue>
-#include <map>
-#include <set>
-
-#include <getopt.h>
-
-#include "elfloader.h"
-#include "basicblock.h"
-#include "instructions.h"
-#include "graph.h"
+#include "cfggenerator.h"
 
 #define DIE(...)                      \
     do                                \
@@ -32,17 +8,11 @@
         exit(EXIT_FAILURE);           \
     } while (0)
 
-struct option long_options[] = {
-    {"reachable-only", no_argument, 0, 'r'},
-    {"full", no_argument, 0, 'r'},
-    {"help", no_argument, 0, 'h'},
-    {0, 0, 0, 0}};
-
 uint64_t counter = 0;
 
-void print_connections(std::map<block_t *, std::set<block_t *>> *connections, block_t *block)
+void print_connections(cfg_t *cfg, block_t *block)
 {
-    for (auto &pair : *connections)
+    for (auto &pair : (cfg->connections))
     {
         block_t *from_block = pair.first;
         if (from_block == block)
@@ -55,21 +25,26 @@ void print_connections(std::map<block_t *, std::set<block_t *>> *connections, bl
     }
 }
 
-void print_graph(std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks)
+void print_graph(cfg_t *cfg)
 {
     printf("GRAPH\n");
-    for (block_t *block : *blocks)
+    for (block_t *block : cfg->blocks)
     {
         printf("%lu 0x%lx - 0x%lx\n", block->id, block->start_addr, block->end_addr);
-        print_connections(connections, block);
+        print_connections(cfg, block);
     }
 }
 
-void check_correctness(std::set<block_t *> *blocks)
+void output_cfg(cfg_t *cfg)
 {
-    for (block_t *block : *blocks)
+    output_graph(&(cfg->connections), &(cfg->blocks));
+}
+
+void check_correctness(cfg_t *cfg)
+{
+    for (block_t *block : cfg->blocks)
     {
-        for (block_t *other_block : *blocks)
+        for (block_t *other_block : cfg->blocks)
         {
             if (block != other_block &&
                 ((block->start_addr >= other_block->start_addr && block->start_addr <= other_block->end_addr) ||
@@ -83,18 +58,18 @@ void check_correctness(std::set<block_t *> *blocks)
     }
 }
 
-block_t *is_start_of_block(std::set<block_t *> *blocks, uint64_t target)
+block_t *is_start_of_block(cfg_t *cfg, uint64_t target)
 {
-    for (block_t *block : *blocks)
+    for (block_t *block : cfg->blocks)
     {
         if (block->start_addr == target)
             return block;
     }
     return NULL;
 }
-block_t *is_between_of_block(std::set<block_t *> *blocks, uint64_t target)
+block_t *is_between_of_block(cfg_t *cfg, uint64_t target)
 {
-    for (block_t *block : *blocks)
+    for (block_t *block : cfg->blocks)
     {
         if (block->start_addr < target && target < block->end_addr)
             return block;
@@ -102,10 +77,10 @@ block_t *is_between_of_block(std::set<block_t *> *blocks, uint64_t target)
     return NULL;
 }
 
-void add_connection(std::map<block_t *, std::set<block_t *>> *connections, block_t *from, block_t *to)
+void add_connection(cfg_t *cfg, block_t *from, block_t *to)
 {
-    auto pair = connections->find(from);
-    if (pair != connections->end())
+    auto pair = cfg->connections.find(from);
+    if (pair != cfg->connections.end())
     {
         std::set<block_t *> *block_connections = &(pair->second);
         for (block_t *block : *block_connections)
@@ -116,67 +91,67 @@ void add_connection(std::map<block_t *, std::set<block_t *>> *connections, block
         block_connections->insert(to);
     }
     else // Block's first connection
-        connections->insert({from, std::set<block_t *>{to}});
+        cfg->connections.insert({from, std::set<block_t *>{to}});
 }
-void remove_connection(std::map<block_t *, std::set<block_t *>> *connections, block_t *from, block_t *to)
+void remove_connection(cfg_t *cfg, block_t *from, block_t *to)
 {
-    auto pair = connections->find(from);
-    if (pair != connections->end())
+    auto pair = cfg->connections.find(from);
+    if (pair != cfg->connections.end())
     {
         std::set<block_t *> *block_connections = &pair->second;
         block_connections->erase(to);
     }
 }
-void switch_connection_origin(std::map<block_t *, std::set<block_t *>> *connections, block_t *from, block_t *new_from)
+void switch_connection_origin(cfg_t *cfg, block_t *from, block_t *new_from)
 {
-    auto pair = connections->find(from);
-    if (pair != connections->end())
+    auto pair = cfg->connections.find(from);
+    if (pair != cfg->connections.end())
     {
         std::set<block_t *> *block_connections = &(pair->second);
         for (block_t *block : *block_connections)
         {
-            add_connection(connections, new_from, block);
+            add_connection(cfg, new_from, block);
         }
         block_connections->clear();
     }
 }
 
-void handle_control_flow(uint64_t target, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block, uint64_t text_start, uint64_t text_end)
+void handle_control_flow(uint64_t target, cfg_t *cfg, std::queue<block_t *> *unexplored_blocks, block_t *block, uint64_t text_start, uint64_t text_end)
 {
     block_t *target_block = NULL;
-    if ((target_block = is_start_of_block(blocks, target)) != NULL)
+    if ((target_block = is_start_of_block(cfg, target)) != NULL)
     {
-        add_connection(connections, block, target_block);
+        add_connection(cfg, block, target_block);
     }
-    else if ((target_block = is_between_of_block(blocks, target)) != NULL) // We have a jump to the middle of a block so we need to split the block
+    else if ((target_block = is_between_of_block(cfg, target)) != NULL) // We have a jump to the middle of a block so we need to split the block
     {
         block_t *second_half = create_basic_block();
         second_half->start_addr = target;
         second_half->end_addr = target_block->end_addr;
         target_block->end_addr = target - 1;
-        blocks->insert(second_half);
+        cfg->blocks.insert(second_half);
         if (second_half->start_addr >= text_start && second_half->end_addr <= text_end)
         {
             unexplored_blocks->push(second_half);
         }
-        add_connection(connections, block, second_half);
-        switch_connection_origin(connections, target_block, second_half);
+        add_connection(cfg, block, second_half);
+        switch_connection_origin(cfg, target_block, second_half);
     }
     else
     {
         target_block = create_basic_block();
         target_block->start_addr = target;
         target_block->end_addr = target;
-        blocks->insert(target_block);
+        cfg->blocks.insert(target_block);
         if (target_block->start_addr >= text_start)
         {
             unexplored_blocks->push(target_block);
         }
-        add_connection(connections, block, target_block);
+        add_connection(cfg, block, target_block);
     }
 }
 
-void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end, std::map<block_t *, std::set<block_t *>> *connections, std::set<block_t *> *blocks, std::queue<block_t *> *unexplored_blocks, block_t *block)
+void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t text_end, cfg_t *cfg, std::queue<block_t *> *unexplored_blocks, block_t *block)
 {
     uint64_t addr, offset, target;
     const uint8_t *pc;
@@ -205,18 +180,18 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
             target = get_cs_ins_immediate_target(cs_ins);
             if (target == 0)
                 break;
-            handle_control_flow(target, connections, blocks, unexplored_blocks, block, text_start, text_end);
+            handle_control_flow(target, cfg, unexplored_blocks, block, text_start, text_end);
             // Conditional branch or a call so we need to add a connection to the fall through path
             if ((is_cs_conditional_csflow_ins(cs_ins) || is_cs_call_ins(cs_ins)) && cs_ins->address + cs_ins->size < text_end)
             {
-                handle_control_flow(cs_ins->address + cs_ins->size, connections, blocks, unexplored_blocks, block, text_start, text_end);
+                handle_control_flow(cs_ins->address + cs_ins->size, cfg, unexplored_blocks, block, text_start, text_end);
             }
             break;
         }
         block_t *next_block = NULL;
-        if ((next_block = is_start_of_block(blocks, cs_ins->address + cs_ins->size)) != NULL) // If next instruction is the start of a block then stop
+        if ((next_block = is_start_of_block(cfg, cs_ins->address + cs_ins->size)) != NULL) // If next instruction is the start of a block then stop
         {
-            add_connection(connections, block, next_block);
+            add_connection(cfg, block, next_block);
             break;
         }
     }
@@ -224,22 +199,24 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
     cs_free(cs_ins, 1);
 }
 
-void free_blocks(std::set<block_t *> *blocks)
+void free_cfg(cfg_t *cfg)
 {
-    for (block_t *block : *blocks)
+    for (block_t *block : cfg->blocks)
     {
         for (auto pair : block->instructions)
             free(pair.second);
         delete block;
     }
+    cfg->blocks.clear();
+    cfg->connections.clear();
+    delete cfg;
 }
 
-void generate_cfg(csh handle, bool reachable_only)
+cfg_t *generate_cfg(csh handle, bool reachable_only)
 {
+    cfg_t *cfg = new cfg_t();
     std::queue<block_t *> found_blocks;
     std::set<block_t *> closed_blocks;
-    std::set<block_t *> all_blocks;
-    std::map<block_t *, std::set<block_t *>> connections;
     uint64_t text_start = 0;
     uint64_t text_end = 0;
     Elf_Data *text = find_text(&text_start, &text_end);
@@ -247,65 +224,16 @@ void generate_cfg(csh handle, bool reachable_only)
     if (!text)
         DIE("(find_text) %s", elf_errmsg(-1));
 
-    add_symbol_blocks(&found_blocks, &all_blocks, text_start, text_end, reachable_only);
+    add_symbol_blocks(&found_blocks, &(cfg->blocks), text_start, text_end, reachable_only);
     while (!found_blocks.empty())
     {
         block_t *block = found_blocks.front();
         found_blocks.pop();
         if (closed_blocks.find(block) != closed_blocks.end())
             continue;
-        process_block(handle, text, text_start, text_end, &connections, &all_blocks, &found_blocks, block);
+        process_block(handle, text, text_start, text_end, cfg, &found_blocks, block);
         closed_blocks.insert(block);
     }
-    check_correctness(&all_blocks);
-#ifdef DEBUG
-    print_graph(&connections, &all_blocks);
-#endif
-    output_graph(&connections, &all_blocks);
-    free_blocks(&all_blocks);
     closed_blocks.clear();
-    all_blocks.clear();
-    connections.clear();
-}
-
-int main(int argc, char *argv[])
-{
-
-    /* Initialize the engine.  */
-    csh handle;
-    if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK)
-        return -1;
-
-    /* AT&T */
-    cs_option(handle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT);
-
-    /* detail mode.  */
-    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-
-    initialize_elf_loader(argv[1]);
-
-    bool reachable_only = false;
-    int opt;
-    while ((opt = getopt_long(argc, argv, "rh", long_options, NULL)) != -1)
-    {
-        switch (opt)
-        {
-        case 'r':
-            reachable_only = true;
-            break;
-        case 'h':
-            printf("Usage: %s ./test_binary [--reachable-only|-r] [--help|-h]\n", argv[0]);
-            exit(0);
-        default:
-            fprintf(stderr, "Unknown option. Use --help for usage.\n");
-            exit(1);
-        }
-    }
-
-    generate_cfg(handle, reachable_only);
-
-    cs_close(&handle);
-    free_elf_loader();
-
-    return 1;
+    return cfg;
 }

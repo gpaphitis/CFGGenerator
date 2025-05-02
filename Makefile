@@ -1,7 +1,7 @@
 CC = g++
 CFLAGS = -Wall -Werror -g
 LDFLAGS = -lelf -lcapstone
-SRC = cfggenerator.cc basicblock.cc elfloader.cc instructions.cc graph.cc
+SRC = cfggenerator.cc basicblock.cc elfloader.cc instructions.cc graph.cc main.cc
 OBJ = $(SRC:.cc=.o)
 TARGET = cfggenerator
 

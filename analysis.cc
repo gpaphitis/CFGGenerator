@@ -69,9 +69,11 @@ void cycles_DFS(cfg_t *cfg, block_t *curr_node, std::list<block_t *> *branch)
             printf("\tBlocks: ");
             for (; it != branch->end(); ++it)
             {
-                printf("B%lu, ", (*it)->id);
+                if (*it == curr_node)
+                    printf("B%lu\n\n", (*it)->id);
+                else
+                    printf("B%lu, ", (*it)->id);
             }
-            printf("\n\n");
         }
         else
         {
@@ -121,6 +123,7 @@ void dead_code_DFS(cfg_t *cfg, block_t *curr_node, std::map<block_t *, bool> *re
 void detect_dead_code(cfg_t *cfg)
 {
     printf("==================== DEAD CODE ====================\n");
+    printf("Unreachable Basic Blocks:\n");
     uint64_t main_start = find_main_start();
     if (main_start == 0)
         return;
@@ -136,7 +139,7 @@ void detect_dead_code(cfg_t *cfg)
     for (auto pair : reachable_blocks)
     {
         if (!pair.second)
-            printf("B%lu\n", pair.first->id);
+            printf("- B%lu\n", pair.first->id);
     }
     reachable_blocks.clear();
 }

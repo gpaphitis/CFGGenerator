@@ -19,11 +19,13 @@ make
 ```
 
 ## Usage
-./cfggenerator [--reachable-only|-r] [--cycles|-c] [--dead-code|-d] [--generate-png|-g] [--help|-h]
+./cfganalyzer ./test-binary [--reachable-only|-r] [--cycles|-c] [--dead-code|-d] [--generate-png|-g] [--help|-h]
 
 ## Options
-- -r, --reachable-only	Only output blocks reachable from the main function
-- -c, --cycles          Performs cycle detection within the CFG and identifies natural loops using dominator-based analysis.
-- -d, --dead-code       Outputs basic blocks that are not reachable from the program's main function.
-- -g, --generate-png    Automatically renders the generated .dot file into a .png image using Graphviz's dot tool.
-- -h, --help	        Show usage information
+| Flag                  | Description                                                                                         |
+| :------------------   | :-------------------------------------------------------------------------------------------------- |
+| -r, --reachable-only  | Only output blocks reachable from the main function                                                 |
+| -c, --cycles          | Performs cycle detection within the CFG and identifies natural loops using dominator-based analysis |
+| -d, --dead-code       | Outputs basic blocks that are not reachable from the program's main function                        |
+| -g, --generate-png    | Automatically renders the generated .dot file into a .png image using Graphviz's dot tool           |
+| -h, --help            | Show usage information                                                                              |

@@ -9,7 +9,8 @@
 
 struct option long_options[] = {
     {"reachable-only", no_argument, 0, 'r'},
-    {"detect-cycles", no_argument, 0, 'c'},
+    {"cycles", no_argument, 0, 'c'},
+    {"dead-code", no_argument, 0, 'd'},
     {"generate-png", no_argument, 0, 'g'},
     {"full", no_argument, 0, 'f'},
     {"help", no_argument, 0, 'h'},
@@ -27,7 +28,7 @@ void generate_dot()
     }
     else if (pid == 0)
     {
-        const char *args[] = {"dot","-Tpng", "graph.dot", "-o", "graph.png", nullptr};
+        const char *args[] = {"dot", "-Tpng", "graph.dot", "-o", "graph.png", nullptr};
         execvp("dot", (char *const *)args);
 
         perror("Failed generating graph from graph.dot");
@@ -58,9 +59,10 @@ int main(int argc, char *argv[])
 
     bool reachable_only = false;
     bool cycle_detection = false;
+    bool dead_code_detection = false;
     bool generate_png = false;
     int opt;
-    while ((opt = getopt_long(argc, argv, "rhcfg", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "rhcfgd", long_options, NULL)) != -1)
     {
         switch (opt)
         {
@@ -69,6 +71,9 @@ int main(int argc, char *argv[])
             break;
         case 'c':
             cycle_detection = true;
+            break;
+        case 'd':
+            dead_code_detection = true;
             break;
         case 'g':
             generate_png = true;
@@ -90,6 +95,8 @@ int main(int argc, char *argv[])
 
     if (cycle_detection)
         detect_cycles(cfg);
+    if (dead_code_detection)
+        detect_dead_code(cfg);
 
     free_cfg(cfg);
     cs_close(&handle);

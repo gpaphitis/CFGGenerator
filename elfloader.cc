@@ -105,6 +105,48 @@ Elf_Data *find_text(uint64_t *text_start, uint64_t *text_end)
     return NULL;
 }
 
+uint64_t find_main_start()
+{
+    Elf_Scn *scn = NULL;
+    Elf_Scn *symtab = NULL;
+    Elf_Data *data;
+    GElf_Shdr shdr;
+    size_t shstrndx;
+
+    if (elf_getshdrstrndx(elf, &shstrndx) != 0)
+        DIE("(getshdrstrndx) %s", elf_errmsg(-1));
+
+    /* Loop over sections.  */
+    while ((scn = elf_nextscn(elf, scn)) != NULL)
+    {
+        if (gelf_getshdr(scn, &shdr) != &shdr)
+            DIE("(getshdr) %s", elf_errmsg(-1));
+
+        /* Locate symbol table.  */
+        if (!strcmp(elf_strptr(elf, shstrndx, shdr.sh_name), ".symtab"))
+        {
+            symtab = scn;
+            break;
+        }
+    }
+
+    /* Get the descriptor.  */
+    if (gelf_getshdr(symtab, &shdr) != &shdr)
+        DIE("(getshdr) %s", elf_errmsg(-1));
+
+    data = elf_getdata(symtab, NULL);
+    int count = shdr.sh_size / shdr.sh_entsize;
+
+    for (int i = 0; i < count; ++i)
+    {
+        GElf_Sym sym;
+        gelf_getsym(data, i, &sym);
+        if (!strcmp("main", elf_strptr(elf, shdr.sh_link, sym.st_name)))
+            return sym.st_value;
+    }
+    return 0;
+}
+
 void free_elf_loader()
 {
     elf_end(elf);

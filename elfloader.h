@@ -17,5 +17,6 @@
 void initialize_elf_loader(char *filename);
 void add_symbol_blocks(std::queue<block_t *> *Q, std::set<block_t *> *blocks, uint64_t text_start, uint64_t text_end, bool reachable_only);
 Elf_Data *find_text(uint64_t *text_start, uint64_t *text_end);
+uint64_t find_main_start();
 void free_elf_loader();
 #endif

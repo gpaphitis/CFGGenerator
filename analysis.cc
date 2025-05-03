@@ -95,9 +95,48 @@ void detect_cycles(cfg_t *cfg)
 
     find_root_nodes(cfg, &root_nodes);
 
+    printf("==================== CYCLES ====================\n");
     for (block_t *block : root_nodes)
     {
         cycles_DFS_wrapper(cfg, block);
     }
     root_nodes.clear();
+}
+
+void dead_code_DFS(cfg_t *cfg, block_t *curr_node, std::map<block_t *, bool> *reachable_blocks)
+{
+    auto reachable_node = reachable_blocks->find(curr_node);
+    if (reachable_node == reachable_blocks->end())
+        return;
+    if (reachable_node->second == true) // Already found block
+        return;
+    reachable_node->second = true;
+    auto map_node = cfg->connections.find(curr_node);
+    if (map_node == cfg->connections.end())
+        return;
+    for (block_t *neighbour : map_node->second)
+        dead_code_DFS(cfg, neighbour, reachable_blocks);
+}
+
+void detect_dead_code(cfg_t *cfg)
+{
+    printf("==================== DEAD CODE ====================\n");
+    uint64_t main_start = find_main_start();
+    if (main_start == 0)
+        return;
+    block_t *main = NULL;
+    std::map<block_t *, bool> reachable_blocks;
+    for (block_t *block : cfg->blocks)
+    {
+        reachable_blocks.insert({block, false});
+        if (block->start_addr == main_start)
+            main = block;
+    }
+    dead_code_DFS(cfg, main, &reachable_blocks);
+    for (auto pair : reachable_blocks)
+    {
+        if (!pair.second)
+            printf("B%lu\n", pair.first->id);
+    }
+    reachable_blocks.clear();
 }

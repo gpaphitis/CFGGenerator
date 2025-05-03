@@ -180,7 +180,8 @@ void process_block(csh handle, Elf_Data *text, uint64_t text_start, uint64_t tex
             target = get_cs_ins_immediate_target(cs_ins);
             if (target == 0)
                 break;
-            handle_control_flow(target, cfg, unexplored_blocks, block, text_start, text_end);
+            if (target >= text_start)
+                handle_control_flow(target, cfg, unexplored_blocks, block, text_start, text_end);
             // Conditional branch or a call so we need to add a connection to the fall through path
             if ((is_cs_conditional_csflow_ins(cs_ins) || is_cs_call_ins(cs_ins)) && cs_ins->address + cs_ins->size < text_end)
             {

@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
             generate_png = true;
             break;
         case 'h':
-            printf("Usage: %s ./test_binary [--reachable-only|-r] [--help|-h] [--cycle-detection|-c] [--generate-png|-g]\n", argv[0]);
+            printf("Usage: %s ./test_binary [--reachable-only|-r] [--cycles|-c] [--dead-code|-d] [--generate-png|-g] [--help|-h]\n", argv[0]);
             exit(0);
         default:
             fprintf(stderr, "Unknown option. Use --help for usage.\n");
